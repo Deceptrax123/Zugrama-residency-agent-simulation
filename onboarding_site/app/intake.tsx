@@ -19,7 +19,7 @@ export default function Intake(){
  let active=true;
  try{
   const supplied=new URLSearchParams(window.location.hash.slice(1)).get('draft');
-  if(supplied!==null&&!validSubmissionKey(supplied))throw Error('Your return link is incomplete. Open the full saved link, or click the Zugrama logo to start again.');
+  if(supplied!==null&&!validSubmissionKey(supplied))throw Error('Your return link is incomplete. Open the full saved link, or click the site logo to start again.');
   let remembered:string|null=null;try{remembered=localStorage.getItem(KEY_STORAGE);}catch{}
   const key=supplied||(validSubmissionKey(remembered)?remembered:createSubmissionKey());
   try{localStorage.setItem(KEY_STORAGE,key);}catch{}

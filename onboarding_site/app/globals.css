@@ -39,3 +39,6 @@
 .watch-addition{margin:22px 0;background:#edf2e4;border-color:#cad9bb}.watch-addition h2{font:26px Georgia,serif;margin:14px 0}.watch-addition p{font-size:13px;line-height:1.9;max-width:900px}.watch-transfer-amount{font:34px Georgia,serif;color:#385a3d;margin:12px 0 22px}
 
 .questionnaire-page .questionnaire-set{scroll-margin-top:32px}.questionnaire-page .questionnaire-set h2{font-size:clamp(1.75rem,4vw,2.7rem)}.questionnaire-page ol{padding-left:1.5rem}.questionnaire-page li{line-height:1.8;margin:1rem 0;padding-left:.35rem}.questionnaire-page details{background:var(--paper,#f6f7f2);border-radius:12px;padding:1rem 1.25rem;margin:1.5rem 0}.questionnaire-page summary{cursor:pointer;font-weight:600}.questionnaire-page .watch-tabs a{white-space:normal;text-decoration:none}.questionnaire-page section{overflow-wrap:anywhere}
+
+/* A longer site name stays readable on narrow headers. */
+.wordmark,.live-page .wordmark{font-size:clamp(21px,2.4vw,29px);letter-spacing:-.7px;line-height:1.12;max-width:310px}.wordmark span{line-height:1.4}@media(max-width:700px){.site-header{height:auto;min-height:95px;gap:18px;flex-wrap:wrap;padding-top:18px;padding-bottom:18px}.wordmark,.live-page .wordmark{font-size:23px;max-width:280px}.watch-header .wordmark{flex-shrink:1}}

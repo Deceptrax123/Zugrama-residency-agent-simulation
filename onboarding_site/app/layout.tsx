@@ -3,7 +3,7 @@ import "./globals.css";
 import "katex/dist/katex.min.css";
 
 export const metadata: Metadata = {
-  title: "Zugrama — Agent Residency Simulation",
+  title: "The Last Human Residency",
   description: "Create, review and save a private residency identity. Join the gathering when you are ready.",
   icons: {
     icon: "/favicon.svg",
