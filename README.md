@@ -84,6 +84,14 @@ native toolsets, global user memory and automatic fallback disabled; application
 tools are dispatched by the residency backend. The adapter checks the gateway's
 tool configuration before inference. Credentials stay on the server.
 
+Hermes applies a 65,536-character limit to each text part. The app splits long
+structured JSON inputs at JSON boundaries into standard text parts and verifies
+that every source value survives normalization. Oversized system text and a
+single oversized JSON value fail before dispatch. The frozen report audits
+older single-part requests separately: a saved request does not prove that all
+its contents reached the model. This repair cannot restore context missing from
+past simulation calls.
+
 On a **provisioned host**, from this folder:
 
 ```bash
@@ -108,7 +116,8 @@ operating an existing host.
 
 ## Hosted frontend
 
-Requires Node >=22.13 and npm. From `onboarding_site/`:
+Use Node 26 and npm for the frontend and its tests (verified here with Node
+26.12.1). From `onboarding_site/`:
 
 ```bash
 mkdir -p .openai

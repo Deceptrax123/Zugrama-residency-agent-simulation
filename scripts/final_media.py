@@ -1,15 +1,19 @@
 """Build labelled report reconstructions; never modifies source simulation logs."""
 from pathlib import Path
-import base64,hashlib,io,json,math,random,struct,wave
+import base64,hashlib,io,json,math,random,struct,wave,sys
+sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
 ROOT=Path(__file__).resolve().parents[1];base=ROOT/'.data/live-residency/final-results/5ca0be9108194c68af3b0f0d8fda0e64';bundle=json.loads((base/'bundle.json').read_text());bundle['source_sha256']=hashlib.sha256((base/'frozen.sqlite3').read_bytes()).hexdigest();bundle['chess']=json.loads((base/'chess.json').read_text());run=next(r for r in bundle['runs'] if r['id']==bundle['current_event_id']);
 # Include only already validated intermediate outputs in a working preview.
 room_reports={}
 for path in (base/'model').glob('rooms-*/validated.json'):
  key=int(path.parent.name.split('-')[1]);room_reports[key]=json.loads(path.read_text())['rooms']
 if room_reports:run['analysis']['rooms']=[r for i in sorted(room_reports) for r in room_reports[i]]
+if (base/'transport-safe-room-overrides.json').exists():
+ overrides=json.loads((base/'transport-safe-room-overrides.json').read_text());run['analysis']['rooms']=[overrides.get(r['room_id'],r) for r in run['analysis']['rooms']]
 answers=[json.loads(path.read_text()) for path in (base/'assessments').glob('*/ANSWER.json')]
 if answers:run['analysis']['agents']=answers
-if (base/'model/event-synthesis/validated.json').exists():run['analysis']['event']=json.loads((base/'model/event-synthesis/validated.json').read_text())
+# The bundle contains the latest validated hierarchical synthesis. An older
+# single-request cache must never overwrite it during presentation assembly.
 # Account for facilitator visits separately from the resident population.
 import sqlite3
 with sqlite3.connect('file:'+str(base/'frozen.sqlite3')+'?mode=ro',uri=True) as db:names=dict(db.execute('SELECT id,name FROM members'))
@@ -23,14 +27,23 @@ for archived in bundle['runs']:
  archived['room_stats']={'median_messages':statistics.median(counts) if counts else 0,'longest_messages':max(counts,default=0),'resident_pair_sets':len(pairs)}
 for assessment in run['analysis']['agents']:
  # Retain the provenance of salvaged Q1 answers separately from the new Q2 packet.
- coverage1=None
+ coverage1=None;q1dir=None
  for path in (base/'model').glob('*/response.json'):
   try:
    value=json.loads(path.read_text());answer=json.loads(value['choices'][0]['message']['content']);networking=answer.get('networking',answer)
    if networking==assessment['networking']:
-    request=json.loads((path.parent/'request.json').read_text());context=json.loads(request['messages'][-1]['content']);coverage1=context.get('coverage');break
+    request=json.loads((path.parent/'request.json').read_text());context=json.loads(request['messages'][-1]['content']);coverage1=context.get('coverage');q1dir=path.parent;break
   except Exception:pass
  if coverage1:assessment['coverage']={'networking':coverage1,'judgment':assessment['coverage'],'private_fields_omitted':True}
+ from residency.report_transport import check_answer_exposure
+ if q1dir is None:raise ValueError('Missing first-questionnaire request provenance')
+ native=check_answer_exposure(q1dir,[v for k,v in assessment['networking'].items() if k!='ranking'])
+ q2key=assessment.get('judgment_request','assessment2-'+assessment['owner_id'])
+ q2dir=base/'model'/q2key
+ if (q2dir.with_name(q2dir.name+'-correction')/'validated.json').exists():q2dir=q2dir.with_name(q2dir.name+'-correction')
+ second_native=check_answer_exposure(q2dir,list(assessment['judgment'].values()))
+ assessment['coverage']['native_input']={'networking':native,'judgment':second_native}
+bundle['coverage']['transport']='Hermes capped each single text part at 65,536 characters during the original runs. Saved application inputs can therefore exceed the context actually received. The methods audit distinguishes full, partial and absent memory-field exposure. A post-event structured-text transport fix preserves JSON values; affected report packets and second-questionnaire reference guides were reissued under new audited keys. First-questionnaire quotations were checked against their original native-visible source fragments. This repair does not retroactively restore missing simulation context.'
 if (base/'hops.json').exists():bundle['hops']=json.loads((base/'hops.json').read_text())
 if (base/'editorial-citation-corrections.json').exists():
  fixes=json.loads((base/'editorial-citation-corrections.json').read_text());bundle['coverage']['editorial_corrections']=str(len(fixes['corrections']))+' citation identifier typos in intermediate overview notes were corrected by an investigator after checking the original message text. Model prose and raw responses were retained; no original conversation, code, questionnaire quote or event state was changed.'

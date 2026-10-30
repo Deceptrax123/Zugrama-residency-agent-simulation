@@ -9,6 +9,46 @@ from .config import APP_ROOT
 from .store import AppError
 
 
+HERMES_TEXT_PART_CHARS = 65536
+
+def prepare_chat_payload(payload):
+    """Preserve structured JSON across Hermes's per-text-part normalization cap.
+
+    Text parts are joined with newlines by Hermes. Splits occur only outside
+    quoted JSON strings, so inserted whitespace never changes a source value.
+    System text uses a different upstream normalizer and must fit one part.
+    """
+    if not isinstance(payload,dict) or not isinstance(payload.get('messages'),list):return payload,[]
+    messages=[];metadata=[]
+    for index,message in enumerate(payload['messages']):
+        item=dict(message);content=item.get('content')
+        if isinstance(content,str) and len(content)>HERMES_TEXT_PART_CHARS:
+            if item.get('role')=='system':raise AppError('The system context exceeds the Hermes text limit; reduce it before sending',413)
+            try:value=json.loads(content)
+            except ValueError:raise AppError('Long Hermes input must be bounded structured JSON; no request was sent',413) from None
+            if not isinstance(value,(dict,list)):raise AppError('Long Hermes input must be a JSON object or array',413)
+            boundaries=[];quoted=False;escaped=False
+            for i,char in enumerate(content):
+                if quoted:
+                    if escaped:escaped=False
+                    elif char=='\\':escaped=True
+                    elif char=='"':quoted=False
+                elif char=='"':quoted=True
+                elif char in ',:{}[]':boundaries.append(i+1)
+            from bisect import bisect_right
+            parts=[];start=0
+            while len(content)-start>60000:
+                stop=bisect_right(boundaries,start+60000)-1
+                if stop<0 or boundaries[stop]<=start:raise AppError('One JSON value exceeds the Hermes text limit; shorten that value',413)
+                end=boundaries[stop];parts.append(content[start:end]);start=end
+            parts.append(content[start:]);normalized='\n'.join(parts)
+            if json.loads(normalized)!=value:raise AppError('Hermes context could not be preserved exactly; no request was sent',413)
+            item['content']=[{'type':'text','text':part} for part in parts]
+            metadata.append({'message_index':index,'role':item.get('role'),'parts':len(parts),'original_chars':len(content),'normalized_chars':len(normalized),'normalized_sha256':hashlib.sha256(normalized.encode()).hexdigest(),'source_values_preserved':True})
+        messages.append(item)
+    return {**payload,'messages':messages},metadata
+
+
 class NoRedirect(urllib.request.HTTPRedirectHandler):
     def redirect_request(self, req, fp, code, msg, headers, newurl):
         # Never forward the server-side credential to a redirected destination.
@@ -24,9 +64,10 @@ class Hermes:
     def request(self, path, payload=None, headers=None, timeout=None):
         if not self.settings.hermes_key:
             raise AppError("Hermes is not configured. Set HERMES_API_KEY on the server.", 503)
+        wire,transport = prepare_chat_payload(payload) if path == '/v1/chat/completions' else (payload,[])
         request = urllib.request.Request(
             self.settings.hermes_url.rstrip("/") + path,
-            data=json.dumps(payload).encode() if payload is not None else None,
+            data=json.dumps(wire).encode() if wire is not None else None,
             headers={"Authorization": "Bearer " + self.settings.hermes_key,
                      "Content-Type": "application/json", **(headers or {})},
         )
@@ -35,7 +76,9 @@ class Hermes:
                 raw = response.read(2_000_001)
             if len(raw) > 2_000_000:
                 raise AppError("Hermes returned an oversized response", 502)
-            return json.loads(raw)
+            result=json.loads(raw)
+            if transport and isinstance(result,dict):result['residency_transport']={'text_parts':transport}
+            return result
         except urllib.error.HTTPError as exc:
             if exc.code in (401, 403):
                 raise AppError("Hermes rejected the server credential. Check HERMES_API_KEY.", 503) from None

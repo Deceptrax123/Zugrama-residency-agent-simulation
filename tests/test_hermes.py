@@ -151,3 +151,23 @@ class HermesTests(unittest.TestCase):
         self.gateway.reply = " "
         with self.assertRaises(AppError):
             self.ask()
+
+class HermesStructuredTransportTests(unittest.TestCase):
+    setUp = HermesTests.setUp
+    def test_long_structured_context_keeps_tail_values_and_exact_source_strings(self):
+        from residency.hermes import prepare_chat_payload,HERMES_TEXT_PART_CHARS
+        data={'messages':[{'id':str(i),'body':'Quoted "value", brackets [{x}], escaped slash \\ and punctuation. '*15} for i in range(80)],'tail':'KEEP THIS FINAL VALUE'}
+        text=json.dumps(data,ensure_ascii=False,separators=(',',':'));self.assertGreater(len(text),HERMES_TEXT_PART_CHARS)
+        payload={'model':'hermes-agent','messages':[{'role':'user','content':text}]}
+        wire,metadata=prepare_chat_payload(payload);parts=wire['messages'][0]['content'];normalized='\n'.join(p['text'] for p in parts)
+        self.assertEqual(json.loads(normalized),data);self.assertEqual(payload['messages'][0]['content'],text)
+        self.assertTrue(all(len(p['text'])<=HERMES_TEXT_PART_CHARS for p in parts));self.assertTrue(metadata[0]['source_values_preserved'])
+        response=self.hermes.request('/v1/chat/completions',payload)
+        self.assertEqual(json.loads('\n'.join(p['text'] for p in self.gateway.records[-1]['payload']['messages'][0]['content'])),data)
+        self.assertTrue(response['residency_transport']['text_parts'][0]['source_values_preserved'])
+
+    def test_oversized_system_text_plaintext_and_single_values_fail_before_dispatch(self):
+        from residency.hermes import prepare_chat_payload
+        for role,text in [('system',json.dumps({'x':['a']*20000})),('user','x'*70000),('user',json.dumps({'x':'z'*70000}))]:
+            with self.subTest(role=role),self.assertRaises(AppError):prepare_chat_payload({'messages':[{'role':role,'content':text}]})
+        self.assertEqual(self.gateway.records,[])

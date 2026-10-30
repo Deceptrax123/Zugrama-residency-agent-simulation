@@ -16,15 +16,15 @@ def main():
  for run in bundle['runs']:
   if run['id']==bundle['current_event_id']:continue
   source_messages=run['messages']
-  prefix='archive-'+run['id'][:8];chunks=[];chunk=[]
+  prefix='archive-transport-safe-'+run['id'][:8];chunks=[];chunk=[]
   for m in run['messages']:
-   item={**m,'body':m['body'][:1200],'text_clipped':len(m['body'])>1200}
+   item={**m,'body':m['body'][:350],'text_clipped':len(m['body'])>350}
    if chunk and len(compact(chunk+[item]).encode())>76000:chunks.append(chunk);chunk=[]
    chunk.append(item)
   if chunk:chunks.append(chunk)
   stage={'event_id':run['id'],'status':'running','chunks':len(chunks),'chunks_done':0,'errors':[]};save(base/(prefix+'-progress.json'),stage);outputs={};lock=threading.RLock()
   def map_job(i,items):
-   value=complete(prefix+'-chunk-'+str(i),MAP,{'people':run['people'],'chunk_index':i,'chunks':len(chunks),'messages':items,'coverage':'Every message is included in exactly one chronological packet; bodies longer than 1200 characters are explicitly excerpted.'},lambda v:check_refs(v,items,run['people'],[r['id'] for r in run['rooms']]))
+   value=complete(prefix+'-chunk-'+str(i),MAP,{'people':run['people'],'chunk_index':i,'chunks':len(chunks),'messages':items,'coverage':'Every message is included in exactly one chronological packet; bodies longer than 350 characters are explicitly excerpted.'},lambda v:check_refs(v,items,run['people'],[r['id'] for r in run['rooms']]))
    with lock:outputs[i]=value;stage['chunks_done']+=1;save(base/(prefix+'-progress.json'),stage)
   with ThreadPoolExecutor(max_workers=3) as pool:
    pending={pool.submit(map_job,i,c):i for i,c in enumerate(chunks)}
@@ -44,7 +44,7 @@ def main():
    context={'people':run['people'],'archival_packets':compressed,'coverage':{'messages':len(run['messages']),'chunks':len(chunks),'validated_chunks':len(notes),'reduction':'Every packet represented by its strongest bounded themes; complete packet notes remain in the archive.'},'counts':{'messages':len(run['messages']),'populated_rooms':sum(bool(r['message_count']) for r in run['rooms']),'boards':len(run['boards']),'programs':sum(t['name']=='python_run' for t in run['tools'])}}
    if len(compact(context).encode())<80000:break
   run['analysis']['packet_notes']=notes
-  try:run['analysis']['event']=complete(prefix+'-synthesis',GLOBAL_SYSTEM+'\nThe inputs are validated chronological packet notes from one earlier run, not the final event. Cover the entire supplied run. Repeated introductions, short-lived rooms and thin evidence are valid findings.',context,lambda v:validate_event_synthesis(v,run['messages'],run['people'],[r['id'] for r in run['rooms']]))
+  try:run['analysis']['event']=complete(prefix+'-synthesis',GLOBAL_SYSTEM+'\nThe inputs are validated chronological packet notes from one earlier run, not the final event. Cover the entire supplied run. Repeated introductions, short-lived rooms and thin evidence are valid findings. Use at most 6 findings, 12 topics, 18 topic-flow edges, 14 ideas, 18 lineage edges, 5 communities and 5 blog sections. Blog sections 120-160 words; other prose fields <=600 characters. Complete chronological packet notes and resident accounts retain the additional detail.',context,lambda v:validate_event_synthesis(v,run['messages'],run['people'],[r['id'] for r in run['rooms']]))
   except Exception as e:stage['errors'].append({'task':'synthesis','error':str(e)[:300]})
   archived_agents={}
   def people_job(targets):
@@ -64,7 +64,7 @@ def main():
    for future in as_completed(pending):
     try:future.result()
     except Exception as e:stage['errors'].append({'task':'resident stories','error':str(e)[:300]})
-  run['analysis']['archival_agents']=list(archived_agents.values());run['analysis']['coverage']={'strategy':'Chronological map/reduce over every recorded message, with bodies capped at 1200 characters. Individual resident accounts are researcher reconstructions, not questionnaires.','messages_reviewed':sum(len(chunks[i]) for i in outputs),'messages_total':len(run['messages']),'packets':len(chunks),'validated_packets':len(outputs)};stage['status']='completed' if not stage['errors'] else 'completed_with_gaps';save(base/(prefix+'-progress.json'),stage);save(base/'bundle.json',bundle)
+  run['analysis']['archival_agents']=list(archived_agents.values());run['analysis']['coverage']={'strategy':'Chronological map/reduce over every recorded message, with bodies capped at 350 characters. Individual resident accounts are researcher reconstructions, not questionnaires.','messages_reviewed':sum(len(chunks[i]) for i in outputs),'messages_total':len(run['messages']),'packets':len(chunks),'validated_packets':len(outputs)};stage['status']='completed' if not stage['errors'] else 'completed_with_gaps';save(base/(prefix+'-progress.json'),stage);save(base/'bundle.json',bundle)
  # Cross-run blog, grounded in the separate event reports and exact counts.
  source_messages=[m for r in bundle['runs'] for m in r['messages']]
  reports=[{'event_id':r['id'],'counts':{'messages':len(r['messages']),'rooms':sum(bool(x['message_count']) for x in r['rooms']),'boards':len(r['boards']),'programs':sum(t['name']=='python_run' for t in r['tools'])},'analysis':json.loads(compact(r['analysis'].get('event')))} for r in bundle['runs']]
@@ -72,14 +72,15 @@ def main():
  if len(compact(context).encode())>84000:
   for r in reports:
    if r['analysis']:r['analysis'].pop('blog_sections',None)
- system=BASE_RULES+'''\nWrite a presentation-to-blog narrative across all three separate archived runs. Return {"headline":"...","summary":"...","sections":[{"title":"...","body":"150-300 words","message_ids":["..."]}],"nodes":[{"id":"n1","label":"run + theme","summary":"...","event_id":"supplied run ID","message_ids":["..."]}],"edges":[{"from_id":"n1","to_id":"n2","relation":"similarity|contrast|recurrence","explanation":"...","confidence":"low|medium|high","message_ids":["..."]}],"limitations":["..."]}. Max 10 sections, 18 comparative theme nodes and 26 edges. The nodes compare themes across separate runs; they are not proof of continuity or transmission across a fresh restart. Distinguish changed conditions from outcomes; do not attribute differences causally to memory. Topics/ideas concern live conversations only. The two questionnaires occurred after the final host stop and cannot be evidence of what agents discussed during networking. Include creative play, what led to artifacts, limits/failures, and the absence of three-resident groups or actual allowance transfers. Never invent success or causality. Each section needs supplied message evidence.'''
+ system=BASE_RULES+'''\nWrite a presentation-to-blog narrative across all three separate archived runs. Return {"headline":"...","summary":"...","sections":[{"title":"...","body":"150-300 words","message_ids":["..."]}],"nodes":[{"id":"n1","label":"run + theme","summary":"...","event_id":"supplied run ID","message_ids":["..."]}],"edges":[{"from_id":"n1","to_id":"n2","relation":"similarity|contrast|recurrence","explanation":"...","confidence":"low|medium|high","message_ids":["..."]}],"limitations":["..."]}. Max 8 sections (120-180 words each), 18 comparative theme nodes (summaries <=250 characters) and 22 edges (explanations <=250 characters). The nodes compare themes across separate runs; they are not proof of continuity or transmission across a fresh restart. Distinguish changed conditions from outcomes; do not attribute differences causally to memory. Topics/ideas concern live conversations only. The two questionnaires occurred after the final host stop and cannot be evidence of what agents discussed during networking. Include creative play, what led to artifacts, limits/failures, and the absence of three-resident groups or actual allowance transfers. Never invent success or causality. Each section needs supplied message evidence.'''
  def validate_study(v):
   check_refs(v,[m for r in bundle['runs'] for m in r['messages']],[p for r in bundle['runs'] for p in r['people']],[room['id'] for r in bundle['runs'] for room in r['rooms']])
   ids={n['id'] for n in v['nodes']};runs={r['id'] for r in bundle['runs']}
   if len(ids)!=len(v['nodes']) or any(n['event_id'] not in runs for n in v['nodes']) or any(e['from_id'] not in ids or e['to_id'] not in ids for e in v['edges']):raise ValueError('Invalid cross-run graph provenance')
   if not v['sections']:raise ValueError('Missing cross-run narrative')
   return v
- try:bundle['study']=complete('cross-run-blog',system,context,validate_study)
+ try:
+  bundle['study']=complete('cross-run-blog-transport-safe',system,context,validate_study);bundle.pop('study_error',None)
  except Exception as e:bundle['study_error']=str(e)[:300]
  bundle['coverage']['semantic_focus']='All recorded messages across three runs were reviewed through bounded, source-linked hierarchical model analysis. Final-event rooms have individual accounts; earlier runs use chronological packets and researcher resident accounts. Only the final event has post-stop agent questionnaires. Short internal citation aliases are mapped back to original message IDs without changing source text.'
  save(base/'bundle.json',bundle)

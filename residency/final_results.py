@@ -59,7 +59,7 @@ class ReportModel:
   self.base=Path(base);self.hermes=hermes;self.lock=threading.RLock();self.condition=threading.Condition(self.lock);self.stop=threading.Event();self.budget=int(budget_usd*1e6);self.path=self.base/'report-usage.json';self.entries=load(self.path) if self.path.exists() else []
  def complete(self,key,system,context,validate):
   corrected=self.base/'model'/(key+'-correction')/'validated.json'
-  if corrected.exists():return load(corrected)
+  if corrected.exists():return self.cached(key+'-correction',context,validate)
   try:return self.call(key,system,context,validate)
   except Exception as error:
    entries=[e for e in self.entries if e['key']==key]
@@ -67,9 +67,15 @@ class ReportModel:
    # One separately budgeted correction of a known completed answer; never
    # replay a provider failure or an uncertain dispatch.
    return self.call(key+'-correction',system+'\nYour previous completed answer failed validation: '+str(error)[:300]+'. Correct that error; cite exact supplied IDs and quotes.',context,validate)
+ def cached(self,key,context,validate):
+  target=self.base/'model'/key
+  request=load(target/'request.json');original=json.loads(request['messages'][-1]['content'])
+  canonical=lambda x:json.dumps(x,sort_keys=True,ensure_ascii=False,separators=(',',':'))
+  if canonical(original)!=canonical(context):raise ValueError('Cached report inputs changed; review them and choose a new job key')
+  return validate(load(target/'validated.json'))
  def call(self,key,system,context,validate):
   target=self.base/'model'/key
-  if (target/'validated.json').exists():return load(target/'validated.json')
+  if (target/'validated.json').exists():return self.cached(key,context,validate)
   if any(e['key']==key and e['status']=='invalid_answer' for e in self.entries):raise ValueError('Known completed invalid answer; inspect retained receipt instead of resending')
   if self.stop.is_set():raise RuntimeError('Report paused; no dispatch')
   # Cached failures are never blindly replayed after an interrupted process.
@@ -78,6 +84,8 @@ class ReportModel:
   if current['event_id']!=load(self.base/'state.json')['event_id'] or current['status'] in ('running','stopping') or current.get('thinking'):raise RuntimeError('Networking must remain stopped during retrospective dispatch')
   if len(compact(context).encode())>90000:raise ValueError('Report packet is oversized; no model call sent')
   payload={'model':MODEL,'stream':False,'model_options':{'reasoning':{'effort':'high'}},'messages':[{'role':'system','content':system},{'role':'user','content':compact(context)}]}
+  from residency.hermes import prepare_chat_payload
+  wire,transport=prepare_chat_payload(payload)
   self.hermes.check()
   if self.hermes.request('/health',timeout=5).get('residency_budget_guard')!='residency-usd-v1':raise RuntimeError('Guarded gateway required')
   with self.lock:
@@ -91,9 +99,10 @@ class ReportModel:
      if self.stop.is_set():raise RuntimeError('Report paused; no dispatch')
     else:self.stop.set();raise RuntimeError('Post-event report reached its separate $25 estimated allowance')
    entry={'id':uuid.uuid4().hex,'key':key,'status':'pending','hold_usd':CALL_HOLD,'cost_usd':0,'at':time.time()};self.entries.append(entry);save(self.path,self.entries)
+  save(target/'wire-request.json',wire);save(target/'transport.json',{'text_parts':transport})
   save(target/'request.json',payload);scope='final-report-'+entry['id']
   try:
-   response=self.hermes.request('/v1/chat/completions',payload,{'X-Hermes-Session-Id':scope,'X-Hermes-Session-Key':scope,'Idempotency-Key':scope},timeout=600);save(target/'response.json',response);check_completion(response)
+   response=self.hermes.request('/v1/chat/completions',payload,{'X-Hermes-Session-Id':scope,'X-Hermes-Session-Key':scope,'Idempotency-Key':scope},timeout=1200);save(target/'response.json',response);check_completion(response)
    u=response.get('usage',{});p=u.get('prompt_tokens');o=u.get('completion_tokens');t=u.get('total_tokens')
    if not all(type(x) is int and x>=0 for x in (p,o,t)) or t!=p+o or not t:raise ValueError('Unknown report token usage')
    with self.lock:entry.update(status='recorded',hold_usd=0,cost_usd=p*2+o*10,input_tokens=p,output_tokens=o);save(self.path,self.entries);self.condition.notify_all()

@@ -72,18 +72,21 @@ class SynthesisEvidenceTests(unittest.TestCase):
   room_ids=[f'room-{n}' for n in range(120)];messages=[{'id':f'message-{n}'} for n in range(120)]
   run={'people':[{'id':'a'}],'messages':messages,'rooms':[{'id':r} for r in room_ids],'boards':[],'tools':[],'transfers':[],'analysis':{'rooms':[{'room_id':r,'title':'A source-linked room','summary':'Discussion '*150,'topics':['A theme'],'key_points':[{'text':'Evidence '*60,'message_ids':[messages[n]['id']]}]} for n,r in enumerate(room_ids)]}}
   class Model:
-   def __init__(self):self.sources=set();self.final_sources=set()
+   def __init__(self,base):self.base=base;self.sources=set();self.final_sources=set()
    def complete(self,key,system,context,validate):
     if 'rooms' in context:
-     mids=[m for r in context['rooms'] for p in r['key_points'] for m in p['message_ids']];self.sources.update(mids)
+     mids=[m for r in context['rooms'] for p in r['key_points'] for m in p['message_ids']];aliases=json.loads((self.base/'model'/key/'citation-aliases.json').read_text());self.sources.update(aliases.get(m,m) for m in mids)
      return validate({'summary':'Source-preserving summary','themes':[{'label':'Theme','summary':'A bounded account','message_ids':mids,'room_ids':[r['room_id'] for r in context['rooms']]}],'transitions':[],'artifact_origins':[],'limitations':[]})
-    mids=[m for p in context['source_linked_room_groups'] for t in p['themes'] for m in t['message_ids']];self.final_sources.update(mids)
-    return validate({'headline':'Source-linked overview','summary':'A report','topics':[{'id':'t','message_ids':mids}],'topic_flow':[],'ideas':[],'lineage':[]})
-  model=Model()
-  with tempfile.TemporaryDirectory() as directory:synthesize(Path(directory),model,run)
+    if 'panels' in context:return validate({'headline':'Source-linked overview','summary':'A report','topic_flow':[],'lineage':[],'blog_sections':[]})
+    mids=[m for p in context['source_linked_room_groups'] for t in p['themes'] for m in t['message_ids']];aliases=json.loads((self.base/'model'/key/'citation-aliases.json').read_text());self.final_sources.update(aliases.get(m,m) for m in mids)
+    return validate({'headline':'Source-linked overview','summary':'A report','topics':[{'id':'t','message_ids':mids}],'topic_flow':[],'ideas':[],'lineage':[],'findings':[],'communities':[],'blog_sections':[],'limitations':[]})
+  with tempfile.TemporaryDirectory() as directory:
+   model=Model(Path(directory));synthesize(Path(directory),model,run)
   self.assertEqual(model.sources,{m['id'] for m in messages});self.assertEqual(model.final_sources,model.sources)
 
-class CorrectionCacheTests(ReportDispatchTests):
+class CorrectionCacheTests(unittest.TestCase):
+ setUp=ReportDispatchTests.setUp
+ Gateway=ReportDispatchTests.Gateway
  def test_completed_correction_is_reused_without_resending_initial_invalid_answer(self):
   model=ReportModel(self.base,self.gateway)
   replies=iter([{'bad':True},{'ok':True}])
@@ -114,3 +117,12 @@ class CitationAliasTests(unittest.TestCase):
    model=Model(Path(directory));value=cited_complete(model,'aliases','system',{'messages':[{'id':original,'body':original}],'message_ids':[original]},lambda v:v,[{'id':original}])
   self.assertEqual(model.context['messages'][0],{'id':'s1','body':original})
   self.assertEqual(value['message_ids'],[original]);self.assertEqual(value['quote'],original);self.assertEqual(value['topics'][0]['id'],'s1')
+
+class CacheInputTests(unittest.TestCase):
+ setUp=ReportDispatchTests.setUp
+ Gateway=ReportDispatchTests.Gateway
+ def test_changed_evidence_cannot_reuse_an_old_cached_answer_or_dispatch_again(self):
+  model=ReportModel(self.base,self.gateway)
+  model.complete('pinned','system',{'evidence':'first packet'},lambda v:v)
+  with self.assertRaises(ValueError):model.complete('pinned','system',{'evidence':'different packet'},lambda v:v)
+  self.assertEqual(len(self.gateway.calls),1)
