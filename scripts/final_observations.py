@@ -14,6 +14,8 @@ for run in bundle['runs']:
    if len(source_text)>65536:counts['native_input_clipped']+=1
    if context.get('private_memory'):
     counts['private_memory_native_'+field_exposure(source_text,'private_memory',native)]+=1
+   for field in ('recent_messages','conversation_threads','workspace_index','person_notes_index'):
+    if context.get(field):counts[field+'_native_'+field_exposure(source_text,field,native)]+=1
    if not intro and context.get('introduction_board'):intro=[{k:p.get(k) for k in ('member_id','body','created_at')} for p in context['introduction_board']]
    if not environment:environment=context.get('room_prompt','')
    text=payload['messages'][0]['content'];digest=hashlib.sha256(text.encode()).hexdigest();call=int(path.parent.name)
@@ -25,5 +27,6 @@ for run in bundle['runs']:
    status=context.get('memory_retrieval',{}).get('status') if isinstance(context.get('memory_retrieval'),dict) else None
    if status:retrieval[status]+=1
   except (ValueError,KeyError,TypeError):counts['unreadable_requests']+=1
- result[run['id']]={'public_introductions':intro,'environment_prompt':environment,'system_variants':list(variants.values()),'counts':dict(counts),'models':dict(models),'reasoning_efforts':dict(efforts),'first_observed':firsts,'retrieval_status_counts':dict(retrieval),'interpretation':'Supplied counts describe saved application requests. The native Hermes parser capped each single text part at 65,536 characters; native_input_clipped and private_memory_native_full/partial/absent distinguish actual input exposure from saved payloads. A post-event structured transport fix preserves JSON values for future requests; it does not change the historical run. These counts do not establish attention, effective use or causation. Private memory contents and per-resident preferences are excluded.'}
+ exposure=' '.join(field.replace('_',' ')+': '+', '.join(str(counts[field+'_native_'+level])+' '+level for level in ('full','partial','absent'))+' normalized fields.' for field in ('recent_messages','conversation_threads','workspace_index'))
+ result[run['id']]={'public_introductions':intro,'environment_prompt':environment,'system_variants':list(variants.values()),'counts':dict(counts),'models':dict(models),'reasoning_efforts':dict(efforts),'first_observed':firsts,'retrieval_status_counts':dict(retrieval),'interpretation':'Supplied counts describe saved application requests. The native Hermes parser capped each single text part at 65,536 characters; native_input_clipped and private_memory_native_full/partial/absent distinguish actual input exposure from saved payloads. '+exposure+' A post-event structured transport fix preserves JSON values for future requests; it does not change the historical run. These counts do not establish attention, effective use or causation. Private memory contents and per-resident preferences are excluded.'}
 (base/'audit-observations.json').write_text(json.dumps(result,indent=2));print(json.dumps({i:{'requests':v['counts'].get('audited_requests'),'models':v['models'],'memory_nonempty':v['counts'].get('private_memory_supplied',0),'person_index_nonempty':v['counts'].get('person_note_index_supplied',0)} for i,v in result.items()},indent=2))

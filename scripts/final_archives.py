@@ -10,7 +10,7 @@ MAP=BASE_RULES+'''\nThis is a chronological excerpt packet from an earlier archi
 AGENTS=BASE_RULES+'''\nWrite researcher reconstructions, not agent self-reports or questionnaires, for EVERY target resident. Use the supplied observations of the archive. Return {"agents":[{"owner_id":"target ID","title":"...","overview":"80-140 words","chapters":[{"title":"...","body":"40-80 words","message_ids":["..."]}],"unresolved":["..."]}]}. At most 3 chapters, at most 3 unresolved points. A resident with no supported contribution should be described with that limitation, not invented participation. Never imply an agent witnessed someone else's private room. No private identity or psychology is supplied. Cite only IDs in the supplied observations.'''
 
 def main():
- base=ROOT/'.data/live-residency/final-results/5ca0be9108194c68af3b0f0d8fda0e64';bundle=load(base/'bundle.json');setup=load(ROOT/'.data/live-residency/setup.json');model=ReportModel(base,Hermes(gateway_settings(ROOT/'.data/live-residency/state',setup['join_code'],model='gpt-6.1-sol',reasoning_effort='high')),budget_usd=25)
+ base=ROOT/'.data/live-residency/final-results/5ca0be9108194c68af3b0f0d8fda0e64';bundle=load(base/'bundle.json');setup=load(ROOT/'.data/live-residency/setup.json');budget=load(base/'report-budget.json')['allowance_usd'] if (base/'report-budget.json').exists() else 25;model=ReportModel(base,Hermes(gateway_settings(ROOT/'.data/live-residency/state',setup['join_code'],model='gpt-6.1-sol',reasoning_effort='high')),budget_usd=budget)
  source_messages=[]
  def complete(key,system,context,validate):return cited_complete(model,key,system,context,validate,source_messages)
  for run in bundle['runs']:

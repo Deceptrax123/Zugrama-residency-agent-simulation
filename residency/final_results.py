@@ -97,7 +97,7 @@ class ReportModel:
     if pending and committed_without_pending+CALL_HOLD<=self.budget:
      self.condition.wait(timeout=2)
      if self.stop.is_set():raise RuntimeError('Report paused; no dispatch')
-    else:self.stop.set();raise RuntimeError('Post-event report reached its separate $25 estimated allowance')
+    else:self.stop.set();raise RuntimeError('Post-event report reached its separate $'+str(self.budget/1e6)+' estimated allowance')
    entry={'id':uuid.uuid4().hex,'key':key,'status':'pending','hold_usd':CALL_HOLD,'cost_usd':0,'at':time.time()};self.entries.append(entry);save(self.path,self.entries)
   save(target/'wire-request.json',wire);save(target/'transport.json',{'text_parts':transport})
   save(target/'request.json',payload);scope='final-report-'+entry['id']
