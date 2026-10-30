@@ -1,0 +1,43 @@
+name: residency-hermes
+services:
+  app:
+    build: .
+    restart: unless-stopped
+    environment:
+      RESIDENCY_JOIN_CODE: ${RESIDENCY_JOIN_CODE:?Set a residency invitation code}
+      RESIDENCY_ORIGIN: ${RESIDENCY_ORIGIN:?Set the HTTPS public origin}
+      RESIDENCY_SECURE_COOKIES: "true"
+      HERMES_API_URL: http://hermes:8642
+      HERMES_API_KEY: ${HERMES_API_KEY:?Set the dedicated Hermes API key}
+      HERMES_MODEL: ${HERMES_MODEL:-hermes-agent}
+      HERMES_TIMEOUT: ${HERMES_TIMEOUT:-90}
+    ports:
+      - "127.0.0.1:7340:7340"
+    volumes:
+      - residency-data:/app/.data
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop: [ALL]
+    depends_on: [hermes]
+    healthcheck:
+      test: [CMD, python, -B, -m, residency.healthcheck]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+  hermes:
+    image: ${HERMES_IMAGE:-nousresearch/hermes-agent:stable}
+    restart: unless-stopped
+    command: [gateway, run]
+    environment:
+      API_SERVER_ENABLED: "true"
+      API_SERVER_HOST: 0.0.0.0
+      API_SERVER_PORT: "8642"
+      API_SERVER_KEY: ${HERMES_API_KEY:?Set the dedicated Hermes API key}
+    volumes:
+      - ./.hermes:/opt/data
+    # No host repository, experiment data, Docker socket, or published gateway port.
+volumes:
+  residency-data:

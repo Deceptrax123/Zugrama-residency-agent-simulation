@@ -1,0 +1,2 @@
+# Separate environment only; the main app remains Python stdlib.
+mem0ai==2.2.1

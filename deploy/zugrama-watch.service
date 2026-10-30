@@ -1,0 +1,13 @@
+[Unit]
+Description=Zugrama shared live conversation mirror
+After=network-online.target zugrama-residency.service
+[Service]
+Type=simple
+WorkingDirectory=/home/srinitish_srinivasan/Agent-network-sandbox-pilot/residency_app
+ExecStart=/usr/bin/python3 -B /home/srinitish_srinivasan/Agent-network-sandbox-pilot/residency_app/scripts/live_watch_bridge.py
+Restart=on-failure
+RestartSec=10
+UMask=0077
+Environment=PYTHONUNBUFFERED=1
+[Install]
+WantedBy=default.target

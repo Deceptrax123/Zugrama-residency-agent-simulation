@@ -1,0 +1,53 @@
+// Run after identity_browser.cjs against the disposable fixture only.
+const {chromium}=require('../.tools/node_modules/playwright');
+const assert=require('node:assert/strict');
+const fs=require('node:fs');
+const base='http://127.0.0.1:7369';
+(async()=>{
+ const browser=await chromium.launch({headless:true,args:['--no-sandbox']});
+ const errors=[];
+ try {
+  const page=await browser.newPage({viewport:{width:1400,height:1000}});
+  page.on('pageerror',error=>errors.push(error.message));
+  await page.goto(base);
+  await page.getByLabel('Email',{exact:true}).fill('researcher@example.test');
+  await page.getByLabel('Password',{exact:true}).fill('browser-fixture-test-password');
+  await page.getByRole('button',{name:'Sign in ↗',exact:true}).click();
+  await page.getByRole('navigation').getByRole('button',{name:'My agents',exact:true}).click();
+  await page.getByRole('heading',{name:'A home for each of your agents.',exact:true}).waitFor();
+  assert.equal(await page.locator('.agent-account').count(),3);
+  const before=await page.evaluate(async()=>await(await fetch('/api/state')).json());
+  const accountsBefore=await page.evaluate(async()=>await(await fetch('/api/agent-accounts')).json());
+  assert.equal(accountsBefore.currency,'USD');
+  assert.ok(accountsBefore.agents.every(agent=>agent.wallet.total_tokens>0));
+  const card=page.locator('.agent-account').first();
+  await card.getByText('Edit this agent’s allowance',{exact:true}).click();
+  await card.getByLabel('Total USD allowance',{exact:true}).fill('12.00');
+  await card.getByLabel('Wrap-up reserve in USD',{exact:true}).fill('2.25');
+  await card.getByRole('button',{name:'Save allowance',exact:true}).click();
+  await page.getByText('USD allowance saved. Networking starts only when you press Start.',{exact:true}).waitFor();
+  await card.getByLabel('What are you looking for?',{exact:true}).fill('Please ask about a musical prototype when you next choose to network.');
+  await card.getByRole('button',{name:'Send to my agent',exact:true}).click();
+  await page.getByText('Your agent will consider this private request on its next funded turn.',{exact:true}).waitFor();
+  await card.getByText('Your requests · 1',{exact:true}).click();
+  await card.getByText('Please ask about a musical prototype when you next choose to network.',{exact:true}).waitFor();
+  await card.getByRole('button',{name:'Read MEMORY.md',exact:true}).click();
+  await page.locator('.memory-document').waitFor();
+  const text=await page.locator('.memory-document').textContent();
+  assert.ok(text.includes('# Personal conversation memory')&&text.includes('An unverified useful idea'));
+  const [download]=await Promise.all([page.waitForEvent('download'),page.getByRole('button',{name:'Download MEMORY.md',exact:true}).click()]);
+  assert.equal(download.suggestedFilename(),'MEMORY.md');
+  assert.equal(fs.readFileSync(await download.path(),'utf8'),text);
+  await page.setViewportSize({width:390,height:844});
+  assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
+  const after=await page.evaluate(async()=>await(await fetch('/api/state')).json());
+  const accountsAfter=await page.evaluate(async()=>await(await fetch('/api/agent-accounts')).json());
+  assert.equal(before.event.calls,after.event.calls);
+  assert.equal(accountsAfter.agents[0].wallet.limit_usd,12);
+  assert.equal(accountsAfter.agents[0].wallet.reserve_usd,2.25);
+  assert.equal(accountsAfter.agents[1].wallet.limit_usd,10);
+  assert.equal(accountsAfter.agents[0].requests.length,1);
+  assert.deepEqual(errors,[]);
+  console.log('PASS USD allowance editing, per-agent tokens and ledger, private requests, MEMORY.md read/download and mobile layout. No event started or real model called.');
+ } finally {await browser.close();}
+})().catch(error=>{console.error(error);process.exitCode=1;});

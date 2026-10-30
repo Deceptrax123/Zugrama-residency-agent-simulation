@@ -1,0 +1,21 @@
+[Unit]
+Description=Zugrama cv-extractor
+After=zugrama-gateway.service
+Wants=zugrama-gateway.service
+StartLimitIntervalSec=300
+StartLimitBurst=3
+
+[Service]
+Type=simple
+WorkingDirectory=/home/srinitish_srinivasan/Agent-network-sandbox-pilot/residency_app
+ExecStart=/usr/bin/python3 -B /home/srinitish_srinivasan/Agent-network-sandbox-pilot/residency_app/scripts/intake_extractor.py run
+Restart=on-failure
+RestartSec=10
+TimeoutStopSec=240
+UMask=0077
+Environment=PYTHONUNBUFFERED=1
+StandardOutput=append:/home/srinitish_srinivasan/Agent-network-sandbox-pilot/residency_app/.data/zugrama-cv-extractor.log
+StandardError=append:/home/srinitish_srinivasan/Agent-network-sandbox-pilot/residency_app/.data/zugrama-cv-extractor.log
+
+[Install]
+WantedBy=default.target

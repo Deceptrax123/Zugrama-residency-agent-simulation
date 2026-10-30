@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "protocol_version": 2,
+  "introduction_phase": true,
+  "introduction_characters": 2000,
+  "model": "gpt-5.6-terra",
+  "backend": "codex_cli",
+  "max_decisions": 27,
+  "max_messages_per_decision": 3,
+  "message_characters": 4000,
+  "timeout_seconds": 180,
+  "seed": 42,
+  "memory": true,
+  "recent_messages": 20,
+  "recent_characters": 16000,
+  "recall_characters": 6000,
+  "recall_units": 6,
+  "scheduler": "seeded_shuffle",
+  "memory_engine": "local_rules",
+  "automatic_start": false,
+  "fallback_model": null
+}

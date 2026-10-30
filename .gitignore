@@ -1,0 +1,34 @@
+.env
+.data/
+.hermes/
+.venv/
+.tools/
+__pycache__/
+*.pyc
+test-results/
+
+# Local secrets and private participant records
+.env.*
+!.env.example
+.dev.vars*
+*.pem
+*.key
+*.sqlite*
+*.db
+*.db-*
+
+# Downloaded dependencies, build products and report bundles
+node_modules/
+outputs/
+dist/
+.next/
+.wrangler/
+.sites-runtime/
+*.tsbuildinfo
+*.log
+coverage/
+playwright-report/
+
+# Hosting workspace metadata is configured per deployment
+onboarding_site/.openai/
+onboarding_site/.git/

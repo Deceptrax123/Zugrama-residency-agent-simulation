@@ -1,0 +1,2 @@
+# Optional post-event chess legality verification; isolated from the live app.
+chess==1.11.2

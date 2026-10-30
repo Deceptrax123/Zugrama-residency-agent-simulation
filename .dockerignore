@@ -1,0 +1,10 @@
+.git
+.env
+.data
+.hermes
+.tools
+.venv
+test-results
+__pycache__
+tests
+scripts

@@ -1,0 +1,21 @@
+[Unit]
+Description=Zugrama residency
+After=zugrama-gateway.service zugrama-memory.service
+Wants=zugrama-gateway.service zugrama-memory.service
+StartLimitIntervalSec=300
+StartLimitBurst=3
+
+[Service]
+Type=simple
+WorkingDirectory=/home/srinitish_srinivasan/Agent-network-sandbox-pilot/residency_app
+ExecStart=/usr/bin/python3 -B /home/srinitish_srinivasan/Agent-network-sandbox-pilot/residency_app/scripts/live_residency.py run
+Restart=on-failure
+RestartSec=10
+TimeoutStopSec=240
+UMask=0077
+Environment=PYTHONUNBUFFERED=1
+StandardOutput=append:/home/srinitish_srinivasan/Agent-network-sandbox-pilot/residency_app/.data/zugrama-residency.log
+StandardError=append:/home/srinitish_srinivasan/Agent-network-sandbox-pilot/residency_app/.data/zugrama-residency.log
+
+[Install]
+WantedBy=default.target
