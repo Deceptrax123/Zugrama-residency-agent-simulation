@@ -126,3 +126,20 @@ class CacheInputTests(unittest.TestCase):
   model.complete('pinned','system',{'evidence':'first packet'},lambda v:v)
   with self.assertRaises(ValueError):model.complete('pinned','system',{'evidence':'different packet'},lambda v:v)
   self.assertEqual(len(self.gateway.calls),1)
+ def test_recovered_usage_without_a_validated_answer_is_never_replayed(self):
+  model=ReportModel(self.base,self.gateway);model.entries=[{'key':'recovered','status':'recorded_usage_recovered','cost_usd':100,'hold_usd':0}]
+  with self.assertRaises(RuntimeError):model.complete('recovered','system',{},lambda v:v)
+  self.assertEqual(self.gateway.calls,[])
+
+class NativeUsageRecoveryTests(unittest.TestCase):
+ def test_only_one_terminal_native_call_with_matching_input_can_release_a_hold(self):
+  import sqlite3
+  from scripts.reconcile_report_usage import recovery
+  db=sqlite3.connect(':memory:');self.addCleanup(db.close);db.row_factory=sqlite3.Row
+  db.execute('CREATE TABLE sessions(id TEXT,model TEXT,input_tokens INTEGER,output_tokens INTEGER,api_call_count INTEGER,tool_call_count INTEGER)');db.execute('CREATE TABLE messages(id INTEGER,session_id TEXT,role TEXT,content TEXT,finish_reason TEXT)')
+  db.execute("INSERT INTO sessions VALUES('final-report-one','gpt-6.1-sol',100,20,1,0)");db.executemany('INSERT INTO messages VALUES(?,?,?,?,?)',[(1,'final-report-one','user','{"evidence":"synthetic"}',None),(2,'final-report-one','assistant','{"ok":true}','stop')])
+  request={'messages':[{'role':'user','content':'{"evidence":"synthetic"}'}]};entry={'id':'one'}
+  self.assertEqual(recovery(entry,request,db)['cost_usd'],400)
+  wrong={'messages':[{'role':'user','content':'{"evidence":"different"}'}]};self.assertIsNone(recovery(entry,wrong,db))
+  db.execute("UPDATE messages SET finish_reason=NULL WHERE role='assistant'");self.assertIsNone(recovery(entry,request,db))
+  db.execute("UPDATE messages SET finish_reason='stop' WHERE role='assistant'");db.execute('UPDATE sessions SET api_call_count=2');self.assertIsNone(recovery(entry,request,db))

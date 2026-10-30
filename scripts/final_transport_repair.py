@@ -76,7 +76,15 @@ def main():
     run['analysis']['agents']=[load(p) for p in (base/'assessments').glob('*/ANSWER.json')]
     save(base/'bundle.json',bundle)
     from final_synthesis import synthesize
-    run['analysis']['event']=synthesize(base,model,run,key_prefix='transport-safe-')
+    reviewed={}
+    review_path=base/'overview-repartition-review.json'
+    if review_path.exists():
+        import hashlib
+        for item in load(review_path)['groups']:
+            path=base/'model'/item['original_key']/'request.json'
+            if hashlib.sha256(path.read_bytes()).hexdigest()!=item['original_request_sha256']:raise ValueError('Reviewed overview source changed')
+            reviewed[item['index']]=2
+    run['analysis']['event']=synthesize(base,model,run,key_prefix='transport-safe-',reviewed_partitions=reviewed)
     save(base/'bundle.json',bundle)
     progress['status']='completed';save(base/'transport-repair-progress.json',progress)
 

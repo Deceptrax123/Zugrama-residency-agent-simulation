@@ -1,7 +1,8 @@
 """Build labelled report reconstructions; never modifies source simulation logs."""
 from pathlib import Path
-import base64,hashlib,io,json,math,random,struct,wave,sys
+import base64,hashlib,io,json,math,random,struct,wave,sys,argparse
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
+parser=argparse.ArgumentParser(description=__doc__);parser.add_argument('--latest',action='store_true',help='Publish the latest detailed event plus all preserved raw archives');args=parser.parse_args()
 ROOT=Path(__file__).resolve().parents[1];base=ROOT/'.data/live-residency/final-results/5ca0be9108194c68af3b0f0d8fda0e64';bundle=json.loads((base/'bundle.json').read_text());bundle['source_sha256']=hashlib.sha256((base/'frozen.sqlite3').read_bytes()).hexdigest();bundle['chess']=json.loads((base/'chess.json').read_text());run=next(r for r in bundle['runs'] if r['id']==bundle['current_event_id']);
 # Include only already validated intermediate outputs in a working preview.
 room_reports={}
@@ -49,6 +50,8 @@ if (base/'editorial-citation-corrections.json').exists():
  fixes=json.loads((base/'editorial-citation-corrections.json').read_text());bundle['coverage']['editorial_corrections']=str(len(fixes['corrections']))+' citation identifier typos in intermediate overview notes were corrected by an investigator after checking the original message text. Model prose and raw responses were retained; no original conversation, code, questionnaire quote or event state was changed.'
 if (base/'report-usage.json').exists():
  entries=json.loads((base/'report-usage.json').read_text());bundle['post_event_usage']={'budget_usd':25,'estimated_usd':sum(e.get('cost_usd',0) for e in entries)/1e6,'held_usd':sum(e.get('hold_usd',0) for e in entries if e['status'] in ('pending','unknown'))/1e6,'entries':[{k:e.get(k) for k in ('key','status','cost_usd','hold_usd','input_tokens','output_tokens')} for e in entries]}
+if (base/'native-usage-reconciliation.json').exists():
+ receipt=json.loads((base/'native-usage-reconciliation.json').read_text());bundle['coverage']['usage_recovery']=str(len(receipt['receipts']))+' timed-out report requests had usage recovered from native terminal session records, with exactly one API call and native user text matching the saved request. No requests were replayed to recover usage. These receipts establish token accounting, not validation of the discarded answers. Other unresolved requests retain their full reservations.'
 rate=22050;beat=60/112;slot=beat/2;duration=32*slot+.6;samples=[0.0]*int(duration*rate);rand=random.Random(194)
 notes=[['.']*8,['.','D4','.','.','.','A4','.','E4'],['.']*8,['.','D4','.','F4','.','A4','G4','E4']];freq={'D4':293.6648,'F4':349.2282,'A4':440,'G4':391.9954,'E4':329.6276}
 def add(at,length,fn):
@@ -65,6 +68,14 @@ peak=max(abs(s) for s in samples);out=io.BytesIO()
 with wave.open(out,'wb') as wav:wav.setnchannels(1);wav.setsampwidth(2);wav.setframerate(rate);wav.writeframes(b''.join(struct.pack('<h',int(s/max(1,peak)*28000)) for s in samples))
 bundle['media']={'music':{'board_id':'b2b3a66dbdc54528a121442d700f5228','title':'Four-bar rhythm exchange','bpm':112,'melody':notes,'audio':'data:audio/wav;base64,'+base64.b64encode(out.getvalue()).decode(),'note':'New report synthesis of the exact written eighth-note grid, D4/F4/A4/G4/E4 notes and proposed 112 BPM. Percussion sounds, envelopes and note lengths are editorial approximations. The agents wrote the sketch; no original audition or performance was recorded.'},'choreography_board_id':'71b6296fa1634718847d0d8b357de679'}
 if (base/'progress.json').exists():bundle['assessment_status']=json.loads((base/'progress.json').read_text())
+if args.latest:
+ bundle['coverage']['publication_scope']='Detailed interpretation, room accounts and both questionnaires cover the latest event. Earlier tabs preserve all raw conversations and artifacts. Additional historical interpretations are being checked separately; absent analysis is not evidence of an absence of topics or connections.'
+ bundle['coverage']['semantic_focus']='The most recent event is the primary case study. Earlier records remain available for direct inspection; uncompleted historical model outputs are excluded from this publication.'
+ for archived in bundle['runs']:
+  if archived['id']!=bundle['current_event_id']:
+   archived['analysis']={'rooms':[],'agents':[],'coverage':{'strategy':'Raw records available. Historical interpretation is being checked separately.','messages_reviewed':0,'messages_total':len(archived['messages']),'packets':0,'validated_packets':0}}
+ bundle.pop('study',None);bundle.pop('study_error',None)
+ bundle['assessment_status']={'status':'latest_event_ready','errors':[]}
 path=base/'presentation.json';path.write_text(json.dumps(bundle,ensure_ascii=False,separators=(',',':')));print('Presentation bytes',path.stat().st_size)
 # Report only key paths, never private values.
 forbidden={'private_memory','own_memories','identity','starting_identities','person_notes','cv_evidence','host_token','password','token','payload'};bad=[]

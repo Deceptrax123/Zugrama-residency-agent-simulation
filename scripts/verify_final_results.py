@@ -6,8 +6,10 @@ sys.path[:0]=[str(ROOT),str(ROOT/'scripts')]
 from final_hops import validate_hops
 
 
-def verify(base):
+def verify(base,latest_only=False):
     data=json.loads((base/'presentation.json').read_text())
+    progress=base/'transport-repair-progress.json'
+    if progress.exists():assert json.loads(progress.read_text())['status']=='completed','Transport review is not complete'
     assert data['source_sha256']==hashlib.sha256((base/'frozen.sqlite3').read_bytes()).hexdigest(),'Frozen database hash mismatch'
     forbidden={'private_memory','own_memories','identity','starting_identities','person_notes','cv_evidence','host_token','password','token','payload'}
     def private_scan(v):
@@ -48,9 +50,11 @@ def verify(base):
             assert tool['owner_id'] in people
             assert set(tool['context_message_ids']+tool['produced_message_ids'])<=set(messages),'Dangling tool provenance'
         assert all(board['message_id'] in messages and board['owner_id'] in people for board in run['boards'])
-        event=run['analysis'].get('event');assert event,'Missing run synthesis'
-        for key in ('headline','summary','findings','topics','topic_flow','ideas','lineage','communities','blog_sections','limitations'):assert key in event,('Missing synthesis field',key)
-        graph(event['topics'],event['topic_flow']);graph(event['ideas'],event['lineage'])
+        event=run['analysis'].get('event')
+        if not latest_only or run['id']==data['current_event_id']:
+            assert event,'Missing run synthesis'
+            for key in ('headline','summary','findings','topics','topic_flow','ideas','lineage','communities','blog_sections','limitations'):assert key in event,('Missing synthesis field',key)
+            graph(event['topics'],event['topic_flow']);graph(event['ideas'],event['lineage'])
         residents={p['id'] for p in run['people'] if not p.get('facilitator')}
         if run['id']==data['current_event_id']:
             assert {x['room_id'] for x in run['analysis']['rooms']}=={r['id'] for r in run['rooms'] if r['message_count']},'Missing room account'
@@ -71,23 +75,25 @@ def verify(base):
                 refs(a['story'],witnessed,people,rooms)
             assert data.get('hops') is not None,'Missing relay assessment'
             validate_hops(data['hops'],run,set(messages))
-        else:
+        elif not latest_only:
             assert {a['owner_id'] for a in run['analysis']['archival_agents']}==residents,'Missing archival resident account'
             coverage=run['analysis']['coverage'];assert coverage['messages_reviewed']==coverage['messages_total']==len(messages)
             assert coverage['validated_packets']==coverage['packets']
         counts.append({'event':run['id'],'messages':len(messages),'rooms':sum(bool(r['message_count']) for r in run['rooms'])})
-    assert data.get('study'),'Missing cross-run synthesis'
-    refs(data['study'],set(all_messages),all_people,{r['id'] for run in data['runs'] for r in run['rooms']})
-    graph(data['study']['nodes'],data['study']['edges'])
-    assert all(n['event_id'] in {r['id'] for r in data['runs']} for n in data['study']['nodes'])
+    if latest_only:assert 'publication_scope' in data['coverage'] and data['assessment_status']['status']=='latest_event_ready','An incomplete archive must be explicitly labelled'
+    else:
+        assert data.get('study'),'Missing cross-run synthesis'
+        refs(data['study'],set(all_messages),all_people,{r['id'] for run in data['runs'] for r in run['rooms']})
+        graph(data['study']['nodes'],data['study']['edges'])
+        assert all(n['event_id'] in {r['id'] for r in data['runs']} for n in data['study']['nodes'])
     assert len(data.get('chess',[]))==2 and all(not game['error'] for game in data['chess'])
     for game in data['chess']:assert all(not p.get('message_id') or p['message_id'] in all_messages for p in game['positions'])
     ledger=json.loads((base/'report-usage.json').read_text());assert not any(e['status']=='pending' for e in ledger)
     committed=sum(e.get('cost_usd',0)+(e.get('hold_usd',0) if e['status']=='unknown' else 0) for e in ledger)/1e6
     assert committed<=data['post_event_usage']['budget_usd']
-    report={'passed':True,'presentation_sha256':hashlib.sha256((base/'presentation.json').read_bytes()).hexdigest(),'source_sha256':data['source_sha256'],'runs':counts,'questionnaire_pairs':21,'messages':len(all_messages),'two_hop_cases':len(data['hops']['chains']),'report_committed_usd':round(committed,6)}
+    report={'passed':True,'scope':'latest_event_and_all_raw_archives' if latest_only else 'all_runs','presentation_sha256':hashlib.sha256((base/'presentation.json').read_bytes()).hexdigest(),'source_sha256':data['source_sha256'],'runs':counts,'questionnaire_pairs':21,'messages':len(all_messages),'two_hop_cases':len(data['hops']['chains']),'report_committed_usd':round(committed,6)}
     (base/'integrity.json').write_text(json.dumps(report,indent=2));return report
 
 
 if __name__=='__main__':
-    parser=argparse.ArgumentParser(description=__doc__);parser.add_argument('--base',type=Path,default=ROOT/'.data/live-residency/final-results/5ca0be9108194c68af3b0f0d8fda0e64');args=parser.parse_args();print(json.dumps(verify(args.base),indent=2))
+    parser=argparse.ArgumentParser(description=__doc__);parser.add_argument('--base',type=Path,default=ROOT/'.data/live-residency/final-results/5ca0be9108194c68af3b0f0d8fda0e64');parser.add_argument('--latest',action='store_true');args=parser.parse_args();print(json.dumps(verify(args.base,args.latest),indent=2))

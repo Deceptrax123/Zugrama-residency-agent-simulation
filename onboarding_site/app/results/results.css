@@ -7,3 +7,6 @@
 .rr-instrument{padding:20px;background:#edf0e4;border-radius:10px;outline-offset:4px}.rr-instrument svg{width:100%;display:block;border-bottom:1px solid #bac4ac}.rr-instrument button{touch-action:none}.rr-question li{line-height:1.9}
 
 .rr-run-tabs{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:0 0 38px;border-bottom:1px solid var(--line);padding-bottom:14px}.rr-run-tabs button{background:transparent;color:var(--muted);border:1px solid var(--line);padding:15px 12px;text-align:left;min-width:0}.rr-run-tabs button[aria-selected=true]{background:#304c3c;color:#fffdf6;border-color:#304c3c}.rr-run-tabs strong{display:block;font-size:13px}.rr-run-tabs span{display:block;font-size:10px;font-weight:400;margin-top:6px}@media(max-width:760px){.rr-run-tabs{gap:5px;margin-bottom:28px}.rr-run-tabs button{padding:12px 8px}.rr-run-tabs strong{font-size:11px}.rr-run-tabs span{font-size:9px}}@media print{.rr-run-tabs{display:none}}
+
+/* Isolate the archive from the onboarding page main padding. */
+main.rr{max-width:none;padding:0}.rr h1,.rr h2,.rr h3{overflow-wrap:anywhere}@media(max-width:760px){.rr h1{font-size:clamp(36px,10vw,51px)}}

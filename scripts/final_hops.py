@@ -2,7 +2,7 @@
 import json,sys
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1];sys.path[:0]=[str(ROOT),str(ROOT/'scripts')]
-from residency.final_results import load,save,compact,ReportModel,BASE_RULES
+from residency.final_results import load,save,compact,ReportModel,BASE_RULES,cited_complete
 from residency.hermes import Hermes
 from runtime_settings import gateway_settings
 
@@ -38,7 +38,12 @@ def main():
     seen.add((mid,origin));candidates.append({'claim':ref,'relay':relay,'possible_sources':list({m['id']:m for m in original[:6]+original[-12:]}.values()),'subsequent_replies':following})
  # First cover distinct source/intermediary/recipient routes, then inspect the
  # remaining cases. This is sampling for a case study, not a claim of prevalence.
- editorial_case=next((c for c in candidates if c['relay']['id']=='e83a437ea7404b949813345db3b71170'),None)
+ # This explicitly selected case is checked semantically by the same model;
+ # including it is not a predetermined verdict or a prevalence estimate.
+ first=sources.get('295a069eb0c94a31bf3e933cf073c467');relay=sources.get('e83a437ea7404b949813345db3b71170');receipt=sources.get('0258a2d76e3641b389500fcb379df976')
+ editorial_case=None
+ if first and relay and receipt and relay['sender_id'] in first['recipients'] and receipt['sender_id'] in relay['recipients'] and first['created_at']<relay['created_at']<receipt['created_at']:
+  editorial_case={'claim':{'selection':'Investigator-selected source, relay and reply; semantic assessment still required.'},'relay':relay,'possible_sources':[first],'subsequent_replies':[receipt],'investigator_selected':True}
  unique=[];routes=set()
  for c in candidates:
   route=(c['possible_sources'][0]['sender_id'],c['relay']['sender_id'],tuple(c['relay']['recipients']))
@@ -47,12 +52,12 @@ def main():
  if len(candidates)>8:candidates=[candidates[round(i*(len(candidates)-1)/7)] for i in range(8)]
  # Include one investigator-selected source/relay/response case for semantic
  # review, without presupposing the model's verdict or changing the transcript.
- if editorial_case and not any(c['relay']['id']==editorial_case['relay']['id'] for c in candidates):candidates=[editorial_case]+candidates[:7]
+ if editorial_case:candidates=[editorial_case]+[c for c in candidates if c['relay']['id']!=editorial_case['relay']['id']][:7]
  def excerpt(m,n):return {k:m[k] for k in ('id','sender_id','conversation_id','created_at','recipients')}|{'body':m['body'][:n]}
- context={'people':run['people'],'candidates':[{'claim':c['claim'],'relay':excerpt(c['relay'],1400),'possible_sources':[excerpt(m,240) for m in c['possible_sources']],'subsequent_replies':[excerpt(m,700) for m in c['subsequent_replies']]} for c in candidates],'coverage':'At most eight reference candidates: a bounded sample of model-identified routes plus an investigator-selected creature-design relay. Selection is purposive, not random or exhaustive. Candidate origin messages are the first six and latest twelve witnessed messages from that origin, excerpted. This is a bounded search, not exhaustive proof of all relays.'}
+ context={'people':run['people'],'candidates':[{'claim':c['claim'],'relay':excerpt(c['relay'],1400),'possible_sources':[excerpt(m,1400 if c.get('investigator_selected') else 240) for m in c['possible_sources']],'subsequent_replies':[excerpt(m,700) for m in c['subsequent_replies']]} for c in candidates],'coverage':'At most eight reference candidates: a bounded sample of model-identified routes plus an investigator-selected creature-design source/relay/reply triplet. Selection is purposive, not random or exhaustive. Other candidate origin messages are the first six and latest twelve witnessed messages from that origin, excerpted to 240 characters; the selected source is bounded at 1400 characters. This is a bounded search, not exhaustive proof of all relays.'}
  while len(compact(context).encode())>83000 and len(context['candidates'])>1:context['candidates'].pop()
  allowed={m['id'] for c in context['candidates'] for m in [c['relay'],*c['possible_sources'],*c['subsequent_replies']]}
  system=BASE_RULES+'\nAssess whether any supplied candidates establish a semantic two-hop relay, source agent → intermediary → recipient. Presence metadata is necessary but does not prove the same idea was transmitted. A mention, parallel interest or generic similarity is not enough. Require matching content or explicit attribution, and explain uncertainty. Do not force a chain. Return {"chains":[{"label":"...","origin_agent_id":"...","intermediary_agent_id":"...","recipient_agent_id":"...","source_message_id":"...","relay_message_id":"...","receipt_message_id":"... or null","explanation":"...","confidence":"low|medium|high","limits":"..."}],"unproven":["..."],"coverage":"..."}. Max eight chains. Cite exact supplied IDs. Distinguish the intermediary reporting a claim from proof that the original claim was true.'
  setup=load(ROOT/'.data/live-residency/setup.json');model=ReportModel(base,Hermes(gateway_settings(ROOT/'.data/live-residency/state',setup['join_code'],model='gpt-6.1-sol',reasoning_effort='high')),budget_usd=25)
- result=model.complete('witnessed-two-hop-lineage',system,context,lambda v:validate_hops(v,run,allowed));result['coverage']=context['coverage']+' These are sampled case studies, not an estimate of relay prevalence.';save(base/'hops.json',result);print(compact({'chains':len(result['chains']),'unproven':len(result['unproven'])}))
+ result=cited_complete(model,'witnessed-two-hop-lineage-transport-safe',system,context,lambda v:validate_hops(v,run,allowed),run['messages']);result['coverage']=context['coverage']+' These are sampled case studies, not an estimate of relay prevalence.';save(base/'hops.json',result);print(compact({'chains':len(result['chains']),'unproven':len(result['unproven'])}))
 if __name__=='__main__':main()

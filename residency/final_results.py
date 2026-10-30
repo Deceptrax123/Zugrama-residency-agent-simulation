@@ -79,7 +79,7 @@ class ReportModel:
   if any(e['key']==key and e['status']=='invalid_answer' for e in self.entries):raise ValueError('Known completed invalid answer; inspect retained receipt instead of resending')
   if self.stop.is_set():raise RuntimeError('Report paused; no dispatch')
   # Cached failures are never blindly replayed after an interrupted process.
-  if any(e['key']==key and e['status'] in ('pending','unknown','quota') for e in self.entries):raise RuntimeError('Earlier request unresolved; review its receipt before another dispatch')
+  if any(e['key']==key and e['status'] in ('pending','unknown','quota','recorded_usage_recovered') for e in self.entries):raise RuntimeError('Earlier request is unresolved or has recovered usage only; review its receipt before another dispatch')
   current=load(ROOT/'.data/live-residency/state/host-event/state.json')
   if current['event_id']!=load(self.base/'state.json')['event_id'] or current['status'] in ('running','stopping') or current.get('thinking'):raise RuntimeError('Networking must remain stopped during retrospective dispatch')
   if len(compact(context).encode())>90000:raise ValueError('Report packet is oversized; no model call sent')
@@ -162,10 +162,10 @@ def check_refs(value,messages,people,rooms,artifacts=None):
      if not isinstance(v,list) or not v:raise ValueError('Every cited item needs a nonempty message_ids list')
      missing=[i for i in v if i not in mids]
      if missing:raise ValueError('Unsupported report source IDs: '+repr(missing[:3])[:220])
-    if k=='room_ids' and any(i not in rids for i in v):raise ValueError('Unsupported report room')
-    if k in ('from_agent_id','to_agent_id','owner_id') and v not in pids:raise ValueError('Unsupported person reference')
-    if k=='member_ids' and any(i not in pids for i in v):raise ValueError('Unsupported community member')
-    if k=='artifact_id' and v not in aids:raise ValueError('Unsupported artifact')
+    if k=='room_ids' and any(i not in rids for i in v):raise ValueError('Unsupported report room IDs: '+repr([i for i in v if i not in rids][:3]))
+    if k in ('from_agent_id','to_agent_id','owner_id') and v not in pids:raise ValueError('Unsupported person reference: '+repr(v))
+    if k=='member_ids' and any(i not in pids for i in v):raise ValueError('Unsupported community member IDs: '+repr([i for i in v if i not in pids][:3]))
+    if k=='artifact_id' and v not in aids:raise ValueError('Unsupported artifact ID: '+repr(v))
     walk(v)
   elif isinstance(x,list):
    for v in x:walk(v)

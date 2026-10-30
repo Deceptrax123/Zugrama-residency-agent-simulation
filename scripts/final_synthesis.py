@@ -8,7 +8,7 @@ from residency.hermes import Hermes
 from runtime_settings import gateway_settings
 MAP=BASE_RULES+'''\nInterpret this group of already source-validated room accounts. Preserve their source message IDs. Return {"summary":"...","themes":[{"label":"...","summary":"...","message_ids":["..."],"room_ids":["..."]}],"transitions":[{"explanation":"...","message_ids":["..."]}],"artifact_origins":[{"explanation":"...","message_ids":["..."]}],"limitations":["..."]}. Maximum 8 themes (summary <=650 characters), 6 transitions and 6 artifact origins (explanation <=500 characters). Every item requires nonempty supplied message IDs. Describe actual designs, disagreements, revisions, play and inconclusive exchanges; do not infer influence from similarity. Summary <=1200 characters. Do not substitute room IDs for message IDs.'''
 
-def synthesize(base,model,run,key_prefix=''):
+def synthesize(base,model,run,key_prefix='',reviewed_partitions=None):
  cards=[]
  for r in run['analysis']['rooms']:
   card={'room_id':r['room_id'],'title':r['title'],'summary':r['summary'][:900],'topics':r['topics'][:4]}
@@ -22,16 +22,29 @@ def synthesize(base,model,run,key_prefix=''):
  progress={'status':'running','packets':len(chunks),'packets_done':0,'rooms':len(cards),'errors':[]};save(base/'synthesis-v2-progress.json',progress);outputs={}
  def job(i,items):
   allowed=set()
-  def gather(v):
+  def gather(v,target=allowed):
    if isinstance(v,dict):
     for k,x in v.items():
-     if k=='message_ids':allowed.update(x)
-     gather(x)
+     if k=='message_ids':target.update(x)
+     gather(x,target)
    elif isinstance(v,list):
-    for x in v:gather(x)
+    for x in v:gather(x,target)
   gather(items)
   assert allowed,'Never dispatch a synthesis packet with all evidence pruned'
-  return cited_complete(model,key_prefix+'event-overview-v2-packet-'+str(i),MAP,{'people':run['people'],'rooms':items,'packet_index':i,'packets':len(chunks)},lambda v:check_refs(v,[m for m in run['messages'] if m['id'] in allowed],run['people'],[r['room_id'] for r in items]),run['messages'])
+  key=key_prefix+'event-overview-v2-packet-'+str(i)
+  def complete(part_key,part,partition=None):
+   part_allowed=set();gather(part,part_allowed)
+   context={'people':run['people'],'rooms':part,'packet_index':i,'packets':len(chunks)}
+   if partition is not None:context['reviewed_repartition']=partition
+   return cited_complete(model,part_key,MAP,context,lambda v:check_refs(v,[m for m in run['messages'] if m['id'] in part_allowed],run['people'],[r['room_id'] for r in part]),run['messages'])
+  if reviewed_partitions and i in reviewed_partitions:
+   # Explicit investigator review creates smaller, different evidence packets.
+   # The uncertain original request is retained and never submitted again.
+   middle=len(items)//2
+   if not middle:raise ValueError('Cannot repartition a one-room overview group')
+   values=[complete(key+'-reviewed-part-'+str(n),part,{'part':n,'parts':2,'reason':'Original native request received a provider overload error; its accounting reservation remains.'}) for n,part in enumerate((items[:middle],items[middle:]))]
+   return {'summary':'\n\n'.join(v['summary'] for v in values),**{field:[item for v in values for item in v[field]] for field in ('themes','transitions','artifact_origins','limitations')}}
+  return complete(key,items)
  with ThreadPoolExecutor(max_workers=3) as pool:
   pending={pool.submit(job,i,c):i for i,c in enumerate(chunks)}
   for f in as_completed(pending):
