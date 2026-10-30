@@ -55,8 +55,8 @@ Requires Python 3.11+ and SQLite with FTS5. The base backend uses the standard
 library. For the standalone repository:
 
 ```bash
-git clone git@github.com:Deceptrax123/zugrama-agent-residency.git
-cd zugrama-agent-residency
+git clone git@github.com:Deceptrax123/Zugrama-residency-agent-simulation.git
+cd Zugrama-residency-agent-simulation
 cp .env.example .env
 # Edit .env and replace RESIDENCY_JOIN_CODE with a long random invitation.
 set -a
