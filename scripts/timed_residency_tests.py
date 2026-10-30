@@ -66,21 +66,30 @@ class PacedGate:
         self.interval=interval;self.capacity=concurrency;self.inflight=0
         self.next_at=0;self.queue=deque();self.condition=threading.Condition()
 
-    def acquire(self,timeout=.2):
-        ident=threading.get_ident();end=time.monotonic()+timeout
+    def acquire(self,*,cancel,key):
+        ticket=object()
         with self.condition:
-            if ident not in self.queue:self.queue.append(ident)
-            while True:
-                now=time.monotonic()
-                if self.queue[0]==ident and self.inflight<self.capacity and now>=self.next_at:
-                    self.queue.popleft();self.inflight+=1;self.next_at=now+self.interval
-                    self.condition.notify_all();return True
-                remaining=end-now
-                if remaining<=0:return False
-                self.condition.wait(min(remaining,max(.001,self.next_at-now)))
+            self.queue.append((ticket,key))
+            try:
+                while not cancel.is_set():
+                    now=time.monotonic()
+                    if self.queue[0][0] is ticket and self.inflight<self.capacity and now>=self.next_at:
+                        self.queue.popleft();self.inflight+=1;self.next_at=now+self.interval
+                        self.condition.notify_all();return True
+                    self.condition.wait(min(.2,max(.001,self.next_at-now)))
+                return False
+            finally:
+                for item in self.queue:
+                    if item[0] is ticket:
+                        self.queue.remove(item);self.condition.notify_all();break
 
     def release(self):
-        with self.condition:self.inflight-=1;self.condition.notify_all()
+        with self.condition:
+            if not self.inflight:raise RuntimeError('No active paced slot to release')
+            self.inflight-=1;self.condition.notify_all()
+
+    def snapshot(self):
+        with self.condition:return {'capacity':self.capacity,'active':self.inflight,'waiting':[key for _,key in self.queue]}
 
 
 def export(server,directory,report):

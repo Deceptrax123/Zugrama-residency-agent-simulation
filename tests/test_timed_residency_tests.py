@@ -14,6 +14,9 @@ import timed_residency_tests as runner
 
 
 class TimedTests(unittest.TestCase):
+    def setUp(self):
+        (APP_ROOT/'.data').mkdir(exist_ok=True)
+
     def test_isolated_paced_run_has_audits_memories_reflections_and_no_replay(self):
         def reply(payload):
             ctx=json.loads(payload['messages'][-1]['content']);rooms=[r for r in ctx['conversations'] if r['joined']]

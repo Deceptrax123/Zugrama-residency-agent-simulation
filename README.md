@@ -135,13 +135,18 @@ in this repository.
 Run from the app root:
 
 ```bash
+python3 -m venv .venv
+. .venv/bin/activate
+python3 -m pip install -r requirements-pdf.txt
 python3 -B -m unittest discover -s tests -v
 python3 -B -m unittest tests.test_final_results -v
 ```
 
 Tests use synthetic data and temporary app-local databases. Optional live checks
 are skipped unless explicitly enabled. They are not a request to start the real
-event. The PDF and memory extras have separate requirements files.
+event. The PDF reader is required for the complete offline suite; its installation is
+shown above. Memory extras have a separate requirements file. One provenance
+comparison is skipped when the optional original experiment archive is absent.
 
 For browser tests, install Playwright inside this app, install its Chromium
 browser, then run the appropriate fixture and test:
