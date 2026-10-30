@@ -63,3 +63,54 @@ class RelayEvidenceTests(unittest.TestCase):
   with self.assertRaises(ValueError):validate_hops(value,bad,{'m1','m2','m3'})
   bad=copy.deepcopy(run);bad['messages'][0]['created_at']=4
   with self.assertRaises(ValueError):validate_hops(value,bad,{'m1','m2','m3'})
+
+class SynthesisEvidenceTests(unittest.TestCase):
+ def test_large_overview_keeps_room_evidence_through_context_reduction(self):
+  import tempfile
+  from pathlib import Path
+  from scripts.final_synthesis import synthesize
+  room_ids=[f'room-{n}' for n in range(120)];messages=[{'id':f'message-{n}'} for n in range(120)]
+  run={'people':[{'id':'a'}],'messages':messages,'rooms':[{'id':r} for r in room_ids],'boards':[],'tools':[],'transfers':[],'analysis':{'rooms':[{'room_id':r,'title':'A source-linked room','summary':'Discussion '*150,'topics':['A theme'],'key_points':[{'text':'Evidence '*60,'message_ids':[messages[n]['id']]}]} for n,r in enumerate(room_ids)]}}
+  class Model:
+   def __init__(self):self.sources=set();self.final_sources=set()
+   def complete(self,key,system,context,validate):
+    if 'rooms' in context:
+     mids=[m for r in context['rooms'] for p in r['key_points'] for m in p['message_ids']];self.sources.update(mids)
+     return validate({'summary':'Source-preserving summary','themes':[{'label':'Theme','summary':'A bounded account','message_ids':mids,'room_ids':[r['room_id'] for r in context['rooms']]}],'transitions':[],'artifact_origins':[],'limitations':[]})
+    mids=[m for p in context['source_linked_room_groups'] for t in p['themes'] for m in t['message_ids']];self.final_sources.update(mids)
+    return validate({'headline':'Source-linked overview','summary':'A report','topics':[{'id':'t','message_ids':mids}],'topic_flow':[],'ideas':[],'lineage':[]})
+  model=Model()
+  with tempfile.TemporaryDirectory() as directory:synthesize(Path(directory),model,run)
+  self.assertEqual(model.sources,{m['id'] for m in messages});self.assertEqual(model.final_sources,model.sources)
+
+class CorrectionCacheTests(ReportDispatchTests):
+ def test_completed_correction_is_reused_without_resending_initial_invalid_answer(self):
+  model=ReportModel(self.base,self.gateway)
+  replies=iter([{'bad':True},{'ok':True}])
+  def request(path,payload=None,headers=None,timeout=None):
+   if path=='/health':return {'residency_budget_guard':'residency-usd-v1'}
+   self.gateway.calls.append(path)
+   return {'choices':[{'finish_reason':'stop','message':{'content':json.dumps(next(replies))}}],'usage':{'prompt_tokens':100,'completion_tokens':20,'total_tokens':120}}
+  self.gateway.request=request
+  def validate(v):
+   if not v.get('ok'):raise ValueError('Missing required result')
+   return v
+  self.assertEqual(model.complete('task','system',{},validate),{'ok':True})
+  self.assertEqual(model.complete('task','system',{},validate),{'ok':True})
+  self.assertEqual(len(self.gateway.calls),2)
+
+class CitationAliasTests(unittest.TestCase):
+ def test_short_citations_round_trip_without_altering_quoted_source_text_or_graph_nodes(self):
+  import tempfile
+  from pathlib import Path
+  from residency.final_results import cited_complete
+  original='a-long-variable-length-message-identifier'
+  class Model:
+   def __init__(self,base):self.base=base
+   def complete(self,key,system,context,validate):
+    self.context=context
+    return validate({'message_ids':['s1'],'quote':original,'topics':[{'id':'s1'}]})
+  with tempfile.TemporaryDirectory() as directory:
+   model=Model(Path(directory));value=cited_complete(model,'aliases','system',{'messages':[{'id':original,'body':original}],'message_ids':[original]},lambda v:v,[{'id':original}])
+  self.assertEqual(model.context['messages'][0],{'id':'s1','body':original})
+  self.assertEqual(value['message_ids'],[original]);self.assertEqual(value['quote'],original);self.assertEqual(value['topics'][0]['id'],'s1')

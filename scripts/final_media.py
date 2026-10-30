@@ -32,6 +32,8 @@ for assessment in run['analysis']['agents']:
   except Exception:pass
  if coverage1:assessment['coverage']={'networking':coverage1,'judgment':assessment['coverage'],'private_fields_omitted':True}
 if (base/'hops.json').exists():bundle['hops']=json.loads((base/'hops.json').read_text())
+if (base/'editorial-citation-corrections.json').exists():
+ fixes=json.loads((base/'editorial-citation-corrections.json').read_text());bundle['coverage']['editorial_corrections']=str(len(fixes['corrections']))+' citation identifier typos in intermediate overview notes were corrected by an investigator after checking the original message text. Model prose and raw responses were retained; no original conversation, code, questionnaire quote or event state was changed.'
 if (base/'report-usage.json').exists():
  entries=json.loads((base/'report-usage.json').read_text());bundle['post_event_usage']={'budget_usd':25,'estimated_usd':sum(e.get('cost_usd',0) for e in entries)/1e6,'held_usd':sum(e.get('hold_usd',0) for e in entries if e['status'] in ('pending','unknown'))/1e6,'entries':[{k:e.get(k) for k in ('key','status','cost_usd','hold_usd','input_tokens','output_tokens')} for e in entries]}
 rate=22050;beat=60/112;slot=beat/2;duration=32*slot+.6;samples=[0.0]*int(duration*rate);rand=random.Random(194)

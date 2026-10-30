@@ -111,12 +111,18 @@ operating an existing host.
 Requires Node >=22.13 and npm. From `onboarding_site/`:
 
 ```bash
+mkdir -p .openai
+test -f .openai/hosting.json || cp ../HOSTING.example.json .openai/hosting.json
 npm run install:ci
 npm run dev -- --hostname 127.0.0.1 --port 5175
 node --test tests/*.test.mjs
 node node_modules/typescript/bin/tsc --noEmit
 npm run build
 ```
+
+The example hosting file configures local bindings without pointing to an existing
+production project. For Sites publication, register your project through Sites
+and retain its returned project ID in `.openai/hosting.json`.
 
 The hosted app uses Cloudflare D1 (`DB`) and R2 (`BUCKET`) bindings through Sites.
 Provision your own bindings, apply the SQL migrations in `drizzle/` in order and

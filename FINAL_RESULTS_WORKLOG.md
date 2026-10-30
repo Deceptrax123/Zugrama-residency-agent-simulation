@@ -124,3 +124,61 @@ Private result-link delivery script prepared: `scripts/deliver_final_questionnai
 It requires all 21 complete pairs, verifies stopped event, saves reviewable MD,
 and inserts 42 addressed owner-scoped links. These cannot become live agent
 instructions. Execute only after the shared report is uploaded and verified.
+
+## Latest handoff · source publication and report assembly
+
+- User requested a separate GitHub repository. Code-only source (no live records,
+  credentials, runtime downloads or generated reports) is now pushed to
+  `https://github.com/Deceptrax123/Zugrama-residency-agent-simulation`, branch main.
+  Initial standalone commit 50e420f; portability fixes 78f06ff. Local publishing
+  checkout `/tmp/zugrama-agent-residency`. Earlier app-only branch in the original
+  repository remains; original Main and original simulations were not changed.
+- Standalone README rewritten for actual current features and explicit provisioning
+  limits. Clean-checkout offline suite passed: 289 discovered, 3 optional checks
+  skipped. PDF parser installed only in isolated test venv. Site 32 tests, TypeScript,
+  production build and desktop/mobile result UI checks passed. Report-focused suite
+  now 28 passed after adding an evidence-preservation regression.
+- Fixed timed test runner's PacedGate to match TurnQueue cancellation/snapshot
+  contract. Optional original-archive provenance test skips when that archive is
+  absent from standalone distribution. No real networking was run by these tests.
+- All 50 final-run room batches and all 21 pairs of questionnaires completed and
+  validated. Main stage ended with an overview-only assembly error: context sizing
+  had removed citation IDs. Both rejected overview responses are retained in audit;
+  no unsupported overview was published. They contained empty source lists, rather
+  than fabricated valid citations.
+- Corrected assembly in `scripts/final_synthesis.py`: nine source-preserving group
+  packets then one overview. Current active repair session 81809; progress file
+  `synthesis-v2-progress.json`, log `synthesis-v2.log`. It reuses completed room
+  accounts; it does not replay uncertain dispatches or regenerate questionnaires.
+  Future `final_results.analyze` now calls this same hierarchical helper.
+- Next-stage controller session 29982 (`/tmp/zugrama-final-next-stages.py`) waits for
+  the new synthesis to complete, then sequentially runs `final_archives.py` and
+  `final_hops.py`. Both share the cumulative $25 estimated ledger. Never run an
+  independent model pipeline against that ledger at the same time.
+- Strict graph endpoint/run provenance validators added before archived/cross-run
+  outputs can be cached. Two-hop input sampling now explicitly includes one
+  investigator-selected creature-design case as well as bounded route samples.
+  Model semantics and temporal/witness validators still decide whether it is a chain.
+- Known creature-design source: Yesh message 295a069eb0c94a31bf3e933cf073c467;
+  Sachit relay e83a437ea7404b949813345db3b71170; Louisa response
+  0258a2d76e3641b389500fcb379df976. This is a proposed design revision, not a
+  demonstrated implementation. The final hop model has not yet run.
+- `verify_final_results.py` now checks source fingerprint, references, exact quotes,
+  witnessed questionnaire sources/rankings, all run/agent/room coverage, graph edges,
+  relay routes and cumulative allowance. `upload_final_results.py` requires the
+  matching validated presentation checksum and verifies authenticated R2 readback.
+- Site source pushed and production archive packaged, SHA
+  653a8204b584d8a646395f80d5717ade3db2d84c. Saved Site version 24:
+  appgprj_6adf7fa87344819187d080e9206798fa~appgver_93648431b8dc8191b5f50fedd37c9864.
+  This is saved only; not deployed yet. Archive is
+  outputs/final-results-20261030.tar.gz. Existing public audience retained.
+  Source package metadata is in functions store `resultsPackage`, saved version
+  in `resultsSavedVersion`. Do not print stored Site object/credentials; Site
+  metadata may include a bearer token.
+- Required: finish source-linked overview; archived maps/stories/syntheses and
+  cross-run narrative; hop assessment; rebuild presentation; run strict integrity
+  and actual final-data browser checks; deploy saved v24; upload protected R2 report;
+  verify production; deliver 42 addressed private questionnaire links with the
+  prepared delivery script; verify event still stopped and stop owned preview.
+  Push latest reporting helpers/tests/docs to the standalone GitHub repo after
+  checking the export manifest. The event must remain stopped throughout.
